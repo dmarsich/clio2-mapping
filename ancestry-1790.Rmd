@@ -1,0 +1,96 @@
+---
+title: "1790-Ancestry"
+author: "David Marsich"
+date: "March 29, 2019"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(tidyverse)
+library(leaflet)
+library(sf)
+
+ancestry_1790_county <- read_csv("ancestry-1790/nhgis0001_ds1_1790_county.csv")
+
+counties_1790<- read_sf("ancestry-1790/US_county_1790_simplified/US_county_1790.shp")  %>% 
+  st_transform(4326)
+
+totalpop_1790_county <- read_csv("ancestry-1790/totalpop_1790_county.csv")
+
+Counties_Combo <- left_join(totalpop_1790_county, ancestry_1790_county, by = "GISJOIN")
+
+plot(st_geometry(counties_1790))
+```
+
+```{r}
+plot(counties_1790["SHAPE_AREA"])
+```
+
+```{r}
+
+
+ggplot(data = Counties_Combo, aes(y = AAA001, x = STATE.x)) + geom_col() + coord_flip() + labs(x = "State", y = "1790 Total Population")
+```
+```{r}
+ggplot(data = scottish, aes(y = scottish, x = state)) + geom_col() + coord_flip() + labs(x = "State", y = "1790 Scottish Population")
+```
+
+```{r}
+scottish <- Counties_Combo %>% 
+  select(GISJOIN, county = COUNTY.x, state = STATE.x,population = AAA001, scottish = AAC002) %>% 
+  mutate(scottish_percent = round(scottish / population, 3)) %>% 
+  arrange(desc(scottish_percent))
+```
+
+```{r}
+ggplot(scottish, aes(x = scottish_percent)) +
+  geom_histogram(binwidth = 0.01)
+```
+
+```{r}
+centroids_1790 <- counties_1790 %>% 
+  st_centroid() 
+
+scottish_points <- centroids_1790 %>% 
+  left_join(scottish, by = "GISJOIN")
+
+leaflet(scottish_points) %>% 
+  addTiles() %>% 
+  addMarkers()
+```
+```{r}
+scottish_shapes <- counties_1790 %>% 
+  left_join(scottish, by = "GISJOIN")
+
+leaflet(scottish_shapes) %>% 
+  addTiles() %>% 
+  addPolygons(label = ~county)
+
+```
+```{r}
+scottish_percent_colors <- colorNumeric("PuRd", domain = scottish$scottish_percent)
+scottish_percent_colors(scottish$scottish_percent) %>% head()
+```
+
+```{r}
+setwd("~/")
+
+leaflet(scottish_shapes) %>% 
+  addTiles() %>% 
+  addPolygons(fillColor = ~scottish_percent_colors(scottish_percent),
+              fillOpacity = 1,
+              color = "black", weight = 1,
+              label = ~county,
+              popup = ~paste0(state, ": ", 100 * scottish_percent, "%")) %>% 
+  addLegend("bottomright", pal = scottish_percent_colors, values = ~scottish_percent,
+    title = "Scottish Ancestry",
+    labFormat = labelFormat(suffix = "%",
+                            transform = function(x) {x * 100}),
+    opacity = 1
+  )
+```
+
