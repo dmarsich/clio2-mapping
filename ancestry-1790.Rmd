@@ -1,7 +1,7 @@
 ---
-title: "1790-Ancestry"
+title: "Mapping Scots in 1790 America"
 author: "David Marsich"
-date: "March 29, 2019"
+date: "April 5, 2019"
 output: html_document
 ---
 
@@ -16,18 +16,26 @@ library(sf)
 
 ancestry_1790_county <- read_csv("ancestry-1790/nhgis0001_ds1_1790_county.csv")
 
+ancestry_1790_state <- read_csv("ancestry-1790/nhgis0001_ds1_1790_state.csv")
+
 counties_1790<- read_sf("ancestry-1790/US_county_1790_simplified/US_county_1790.shp")  %>% 
   st_transform(4326)
 
+states_1790 <- read_sf("ancestry-1790/US_state_1790_simplified/US_state_1790.shp") %>% st_transform(4326)
+
 totalpop_1790_county <- read_csv("ancestry-1790/totalpop_1790_county.csv")
 
+totalpop_1790_state <- read_csv("ancestry-1790/totalpop_1790_state.csv")
+
 Counties_Combo <- left_join(totalpop_1790_county, ancestry_1790_county, by = "GISJOIN")
+
+States_Combo <- left_join(totalpop_1790_state, ancestry_1790_state, by = "GISJOIN")
 
 plot(st_geometry(counties_1790))
 ```
 
 ```{r}
-plot(counties_1790["SHAPE_AREA"])
+plot(states_1790["SHAPE_AREA"])
 ```
 
 ```{r}
@@ -47,8 +55,10 @@ scottish <- Counties_Combo %>%
 ```
 
 ```{r}
-ggplot(scottish, aes(x = scottish_percent)) +
-  geom_histogram(binwidth = 0.01)
+scottish_state <- States_Combo %>% 
+  select(GISJOIN, state = STATE.x, population = AAA001, scottish = AAC002) %>% 
+  mutate(scottish_percent = round(scottish / population, 3)) %>% 
+  arrange(desc(scottish_percent))
 ```
 
 ```{r}
@@ -78,7 +88,40 @@ scottish_percent_colors(scottish$scottish_percent) %>% head()
 
 ```{r}
 setwd("~/")
+scottish_state_shapes <- states_1790 %>% 
+  left_join(scottish_state, by = "GISJOIN")
 
+leaflet(scottish_state_shapes) %>% 
+  addTiles() %>% 
+  addPolygons(label = ~state)
+```
+
+```{r}
+setwd("~/")
+leaflet(scottish_state_shapes) %>% 
+  addTiles() %>% 
+  addPolygons(fillColor = ~scottish_percent_colors(scottish_percent),
+              fillOpacity = 1,
+              color = "black", weight = 1,
+              label = ~state,
+              popup = ~paste0(state, ": ", 100 * scottish_percent, "%")) %>% 
+  addLegend("bottomright", pal = scottish_percent_colors, values = ~scottish_percent,
+    title = "Scottish Ancestry",
+    labFormat = labelFormat(suffix = "%",
+                            transform = function(x) {x * 100}),
+    opacity = 1
+  )
+
+
+```
+
+
+
+
+
+
+```{r}
+setwd("~/")
 leaflet(scottish_shapes) %>% 
   addTiles() %>% 
   addPolygons(fillColor = ~scottish_percent_colors(scottish_percent),
